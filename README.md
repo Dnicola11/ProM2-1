@@ -1,11 +1,9 @@
-# Gestión de Repuestos - Prueba de Concepto
-
-Esta es una aplicación móvil React Native de prueba de concepto para la gestión de inventario de repuestos con autenticación Firebase y almacenamiento Firestore, junto con un backend mínimo de Node.js.
+# Gestión de Repuestos 
 
 ## Características
 - Inicio de sesión de usuario con autenticación Firebase
 - Registrar, actualizar, eliminar repuestos almacenados en Firestore
-- Backend básico de Node.js para gestión de repuestos (opcional)
+- Backend básico de Node.js para gestión de repuestos
 
 ## Configuración
 
@@ -32,6 +30,5 @@ Esta es una aplicación móvil React Native de prueba de concepto para la gesti�
    npm run dev
    ```
 
-## Notas
-- Esta es una prueba de concepto mínima para propósitos de demostración.
+## Nota
 - Se requiere configuración del proyecto Firebase con autenticación y Firestore habilitados.
