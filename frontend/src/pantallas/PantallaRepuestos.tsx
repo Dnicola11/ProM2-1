@@ -7,7 +7,8 @@ import {
   StyleSheet, 
   Modal, 
   TextInput,
-  Alert 
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
@@ -26,78 +27,183 @@ export default function PantallaRepuestos({ navigation }: any) {
   const [nombre, setNombre] = useState('');
   const [cantidad, setCantidad] = useState('');
   const [precio, setPrecio] = useState('');
+  const [cargando, setCargando] = useState(false);
+  const [cargandoLista, setCargandoLista] = useState(true);
 
   useEffect(() => {
     obtenerRepuestos();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        // Solo redirigir si realmente no hay usuario autenticado
+        setTimeout(() => {
+          if (!auth.currentUser) {
+            navigation.replace('Inicio');
+          }
+        }, 1000);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigation]);
+
   const obtenerRepuestos = async () => {
     try {
+      setCargandoLista(true);
       const querySnapshot = await getDocs(collection(db, 'spareParts'));
-      const repuestos: Repuesto[] = [];
+      const repuestosData: Repuesto[] = [];
       querySnapshot.forEach((doc) => {
-        repuestos.push({ id: doc.id, ...doc.data() } as Repuesto);
+        repuestosData.push({ id: doc.id, ...doc.data() } as Repuesto);
       });
-      setRepuestos(repuestos);
-    } catch (error) {
+      setRepuestos(repuestosData);
+    } catch (error: any) {
       console.error('Error al obtener repuestos:', error);
-      Alert.alert('Error', 'No se pudieron cargar los repuestos');
+      if (error.code === 'unavailable') {
+        Alert.alert(
+          'Sin conexión',
+          'No se puede conectar al servidor. Verifica tu conexión a internet.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', 'No se pudieron cargar los repuestos');
+      }
+    } finally {
+      setCargandoLista(false);
     }
   };
 
   const manejarAgregar = async () => {
+    if (!nombre.trim() || !cantidad || !precio) {
+      Alert.alert('Error', 'Por favor complete todos los campos');
+      return;
+    }
+
+    const nuevoRepuesto = {
+      nombre: nombre.trim(),
+      cantidad: parseInt(cantidad),
+      precio: parseFloat(precio),
+    };
+
+    setCargando(true);
+
+    // Crear un ID temporal
+    const tempId = Date.now().toString();
+    const repuestoTemporal = { id: tempId, ...nuevoRepuesto };
+
+    // Actualizar UI inmediatamente
+    setRepuestos(prev => [...prev, repuestoTemporal]);
+    limpiarFormulario();
+    setModalVisible(false);
+
     try {
-      if (!nombre || !cantidad || !precio) {
-        Alert.alert('Error', 'Por favor complete todos los campos');
-        return;
-      }
-
-      const nuevoRepuesto = {
-        nombre,
-        cantidad: parseInt(cantidad),
-        precio: parseFloat(precio),
-      };
-
-      await addDoc(collection(db, 'spareParts'), nuevoRepuesto);
-      limpiarFormulario();
-      obtenerRepuestos();
-      setModalVisible(false);
-    } catch (error) {
+      // Intentar agregar a Firebase
+      const docRef = await addDoc(collection(db, 'spareParts'), nuevoRepuesto);
+      
+      // Si se agregó exitosamente, actualizar el ID
+      setRepuestos(prev => 
+        prev.map(item => 
+          item.id === tempId 
+            ? { ...item, id: docRef.id }
+            : item
+        )
+      );
+    } catch (error: any) {
       console.error('Error al agregar repuesto:', error);
-      Alert.alert('Error', 'No se pudo agregar el repuesto');
+      
+      Alert.alert(
+        'Sincronización pendiente',
+        'El repuesto se guardó localmente y se sincronizará cuando se restablezca la conexión.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setCargando(false);
     }
   };
 
   const manejarEditar = async () => {
-    try {
-      if (!repuestoEditando || !nombre || !cantidad || !precio) {
-        Alert.alert('Error', 'Por favor complete todos los campos');
-        return;
-      }
+    if (!repuestoEditando || !nombre.trim() || !cantidad || !precio) {
+      Alert.alert('Error', 'Por favor complete todos los campos');
+      return;
+    }
 
-      await updateDoc(doc(db, 'spareParts', repuestoEditando.id), {
-        nombre,
+    try {
+      setCargando(true);
+
+      const datosActualizados = {
+        nombre: nombre.trim(),
         cantidad: parseInt(cantidad),
         precio: parseFloat(precio),
-      });
+      };
+
+      await updateDoc(doc(db, 'spareParts', repuestoEditando.id), datosActualizados);
+
+      // Actualizar la lista local inmediatamente
+      setRepuestos(prev => 
+        prev.map(item => 
+          item.id === repuestoEditando.id 
+            ? { ...item, ...datosActualizados }
+            : item
+        )
+      );
 
       limpiarFormulario();
-      obtenerRepuestos();
       setModalVisible(false);
-    } catch (error) {
+      
+      Alert.alert('Éxito', 'Repuesto actualizado correctamente');
+    } catch (error: any) {
       console.error('Error al actualizar repuesto:', error);
-      Alert.alert('Error', 'No se pudo actualizar el repuesto');
+      if (error.code === 'unavailable') {
+        Alert.alert(
+          'Sin conexión',
+          'No se puede conectar al servidor. Los cambios se guardarán cuando se restablezca la conexión.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', 'No se pudo actualizar el repuesto');
+      }
+    } finally {
+      setCargando(false);
     }
   };
 
-  const manejarEliminar = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'spareParts', id));
-      obtenerRepuestos();
-    } catch (error) {
-      console.error('Error al eliminar repuesto:', error);
-      Alert.alert('Error', 'No se pudo eliminar el repuesto');
-    }
+  const manejarEliminar = async (id: string, nombre: string) => {
+    Alert.alert(
+      'Confirmar eliminación',
+      `¿Está seguro que desea eliminar el repuesto "${nombre}"?`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'spareParts', id));
+              
+              // Remover de la lista local inmediatamente
+              setRepuestos(prev => prev.filter(item => item.id !== id));
+              
+              Alert.alert('Éxito', 'Repuesto eliminado correctamente');
+            } catch (error: any) {
+              console.error('Error al eliminar repuesto:', error);
+              if (error.code === 'unavailable') {
+                Alert.alert(
+                  'Sin conexión',
+                  'No se puede conectar al servidor. El elemento se eliminará cuando se restablezca la conexión.',
+                  [{ text: 'OK' }]
+                );
+              } else {
+                Alert.alert('Error', 'No se pudo eliminar el repuesto');
+              }
+            }
+          },
+        },
+      ]
+    );
   };
 
   const limpiarFormulario = () => {
@@ -132,34 +238,43 @@ export default function PantallaRepuestos({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={repuestos}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.itemRepuesto}>
-            <View style={styles.infoRepuesto}>
-              <Text style={styles.nombreRepuesto}>{item.nombre}</Text>
-              <Text style={styles.detallesRepuesto}>
-                Cantidad: {item.cantidad} | Precio: ${item.precio}
-              </Text>
+      {cargandoLista ? (
+        <View style={styles.contenedorCarga}>
+          <ActivityIndicator size="large" color="#000" />
+          <Text style={styles.textoCarga}>Cargando repuestos...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={repuestos}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.itemRepuesto}>
+              <View style={styles.infoRepuesto}>
+                <Text style={styles.nombreRepuesto}>{item.nombre}</Text>
+                <Text style={styles.detallesRepuesto}>
+                  Cantidad: {item.cantidad} | Precio: ${item.precio}
+                </Text>
+              </View>
+              <View style={styles.botonesAccion}>
+                <TouchableOpacity
+                  style={[styles.botonAccion, styles.botonEditar]}
+                  onPress={() => abrirModalEditar(item)}
+                >
+                  <Text style={styles.textoBotonAccion}>Editar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.botonAccion, styles.botonEliminar]}
+                  onPress={() => manejarEliminar(item.id, item.nombre)}
+                >
+                  <Text style={styles.textoBotonAccion}>Eliminar</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.botonesAccion}>
-              <TouchableOpacity
-                style={[styles.botonAccion, styles.botonEditar]}
-                onPress={() => abrirModalEditar(item)}
-              >
-                <Text style={styles.textoBotonAccion}>Editar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.botonAccion, styles.botonEliminar]}
-                onPress={() => manejarEliminar(item.id)}
-              >
-                <Text style={styles.textoBotonAccion}>Eliminar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      />
+          )}
+          refreshing={cargandoLista}
+          onRefresh={obtenerRepuestos}
+        />
+      )}
 
       <Modal
         animationType="slide"
@@ -202,16 +317,22 @@ export default function PantallaRepuestos({ navigation }: any) {
                   limpiarFormulario();
                   setModalVisible(false);
                 }}
+                disabled={cargando}
               >
                 <Text style={styles.textoBotonModal}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.botonModal, styles.botonGuardar]}
+                style={[styles.botonModal, styles.botonGuardar, cargando && styles.botonDeshabilitado]}
                 onPress={repuestoEditando ? manejarEditar : manejarAgregar}
+                disabled={cargando}
               >
-                <Text style={styles.textoBotonModal}>
-                  {repuestoEditando ? 'Guardar' : 'Agregar'}
-                </Text>
+                {cargando ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.textoBotonModal}>
+                    {repuestoEditando ? 'Guardar' : 'Agregar'}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -337,5 +458,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     fontWeight: 'bold',
+  },
+  contenedorCarga: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textoCarga: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  botonDeshabilitado: {
+    opacity: 0.6,
   },
 });
