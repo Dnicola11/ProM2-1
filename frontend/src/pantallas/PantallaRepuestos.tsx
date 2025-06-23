@@ -44,7 +44,7 @@ export default function PantallaRepuestos({ navigation }: any) {
   const obtenerRepuestos = async () => {
     try {
       setCargandoLista(true);
-      const querySnapshot = await getDocs(collection(db, 'spareParts'));
+      const querySnapshot = await getDocs(collection(db, 'repuestos'));
       const repuestosData: Repuesto[] = [];
       querySnapshot.forEach((doc) => {
         repuestosData.push({ id: doc.id, ...doc.data() } as Repuesto);
@@ -142,7 +142,7 @@ export default function PantallaRepuestos({ navigation }: any) {
 
     try {
       // Intentar agregar a Firebase
-      const docRef = await addDoc(collection(db, 'spareParts'), nuevoRepuesto);
+      const docRef = await addDoc(collection(db, 'repuestos'), nuevoRepuesto);
       
       // Si se agregó exitosamente, actualizar el ID
       setRepuestos(prev => 
@@ -184,7 +184,7 @@ export default function PantallaRepuestos({ navigation }: any) {
       await enableFirestoreNetwork();
 
       // Intentar actualizar en Firebase
-      await updateDoc(doc(db, 'spareParts', repuestoEditando.id), datosActualizados);
+      await updateDoc(doc(db, 'repuestos', repuestoEditando.id), datosActualizados);
 
       // Si la actualización fue exitosa, actualizar UI y cerrar modal
       setRepuestos(prev => 
@@ -233,7 +233,7 @@ export default function PantallaRepuestos({ navigation }: any) {
               await enableFirestoreNetwork();
 
               // Intentar eliminar en Firebase
-              await deleteDoc(doc(db, 'spareParts', id));
+              await deleteDoc(doc(db, 'repuestos', id));
 
               // Si la eliminación fue exitosa, actualizar UI
               setRepuestos(prev => prev.filter(item => item.id !== id));
