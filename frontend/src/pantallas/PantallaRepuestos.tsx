@@ -135,7 +135,7 @@ export default function PantallaRepuestos({ navigation }: any) {
     const tempId = Date.now().toString();
     const repuestoTemporal = { id: tempId, ...nuevoRepuesto };
 
-    // Actualizar UI inmediatamente
+    // Actualizar IU inmediatamente
     setRepuestos(prev => [...prev, repuestoTemporal]);
     limpiarFormulario();
     setModalVisible(false);

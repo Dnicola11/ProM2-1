@@ -16,11 +16,11 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Función para habilitar/deshabilitar la red de Firestore
+// Habilitar/deshabilitar la red de Firestore
 export const enableFirestoreNetwork = () => enableNetwork(db);
 export const disableFirestoreNetwork = () => disableNetwork(db);
 
-// Configuración adicional para mejor manejo de errores
+// Manejo de errores con los mensajes de error de Firestore
 export const isFirestoreError = (error: any) => {
   return error?.code && (
     error.code === 'unavailable' ||
