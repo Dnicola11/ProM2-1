@@ -12,6 +12,16 @@ import {
 } from 'react-native';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db, auth, isFirestoreError, enableFirestoreNetwork } from '../../firebaseConfig';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+type RootStackParamList = {
+  Inicio: undefined;
+  Repuestos: undefined;
+};
+
+type PantallaRepuestosProps = {
+  navigation: NativeStackNavigationProp<RootStackParamList, 'Repuestos'>;
+};
 
 type Repuesto = {
   id: string;
@@ -29,38 +39,7 @@ export default function PantallaRepuestos({ navigation }: any) {
   const [precio, setPrecio] = useState('');
   const [cargando, setCargando] = useState(false);
   const [cargandoLista, setCargandoLista] = useState(true);
-
-  useEffect(() => {
-    const inicializarFirestore = async () => {
-      try {
-        await enableFirestoreNetwork();
-        obtenerRepuestos();
-      } catch (error) {
-        console.error('Error al inicializar Firestore:', error);
-        Alert.alert(
-          'Error de Conexión',
-          'No se pudo establecer conexión con el servidor. La aplicación funcionará en modo sin conexión.'
-        );
-      }
-    };
-    
-    inicializarFirestore();
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (!user) {
-        // Solo redirigir si realmente no hay usuario autenticado
-        setTimeout(() => {
-          if (!auth.currentUser) {
-            navigation.replace('Inicio');
-          }
-        }, 1000);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [navigation]);
+  const [eliminando, setEliminando] = useState<string | null>(null);
 
   const obtenerRepuestos = async () => {
     try {
@@ -86,6 +65,57 @@ export default function PantallaRepuestos({ navigation }: any) {
       setCargandoLista(false);
     }
   };
+
+  const manejarCerrarSesion = () => {
+    auth.signOut()
+      .then(() => navigation.replace('Inicio'))
+      .catch(error => Alert.alert('Error', error.message));
+  };
+
+  useEffect(() => {
+    const inicializarFirestore = async () => {
+      try {
+        await enableFirestoreNetwork();
+        obtenerRepuestos();
+      } catch (error) {
+        console.error('Error al inicializar Firestore:', error);
+        Alert.alert(
+          'Error de Conexión',
+          'No se pudo establecer conexión con el servidor. La aplicación funcionará en modo sin conexión.'
+        );
+      }
+    };
+    
+    inicializarFirestore();
+  }, []);
+
+  useEffect(() => {
+    // Configurar el header con el botón de salir
+    navigation.setOptions({
+      title: 'Gestión de Repuestos',
+      headerRight: () => (
+        <TouchableOpacity 
+          style={styles.botonHeaderSalir} 
+          onPress={manejarCerrarSesion}
+        >
+          <Text style={styles.textoBotonHeaderSalir}>Salir</Text>
+        </TouchableOpacity>
+      ),
+    });
+
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        // Solo redirigir si realmente no hay usuario autenticado
+        setTimeout(() => {
+          if (!auth.currentUser) {
+            navigation.replace('Inicio');
+          }
+        }, 1000);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigation]);
 
   const manejarAgregar = async () => {
     if (!nombre.trim() || !cantidad || !precio) {
@@ -184,8 +214,6 @@ export default function PantallaRepuestos({ navigation }: any) {
     }
   };
 
-  const [eliminando, setEliminando] = useState<string | null>(null);
-
   const manejarEliminar = async (id: string, nombre: string) => {
     Alert.alert(
       'Confirmar eliminación',
@@ -237,12 +265,6 @@ export default function PantallaRepuestos({ navigation }: any) {
     setRepuestoEditando(null);
   };
 
-  const manejarCerrarSesion = () => {
-    auth.signOut()
-      .then(() => navigation.replace('Inicio'))
-      .catch(error => Alert.alert('Error', error.message));
-  };
-
   const abrirModalEditar = (repuesto: Repuesto) => {
     setRepuestoEditando(repuesto);
     setNombre(repuesto.nombre);
@@ -253,12 +275,12 @@ export default function PantallaRepuestos({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={styles.headerActions}>
         <TouchableOpacity style={styles.botonAgregar} onPress={() => setModalVisible(true)}>
           <Text style={styles.textoBotonAgregar}>Agregar Nuevo Repuesto</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.botonCerrarSesion} onPress={manejarCerrarSesion}>
-          <Text style={styles.textoBotonCerrarSesion}>Salir</Text>
+        <TouchableOpacity style={styles.botonActualizar} onPress={obtenerRepuestos}>
+          <Text style={styles.textoBotonActualizar}>↻</Text>
         </TouchableOpacity>
       </View>
 
@@ -372,10 +394,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 15,
   },
-  header: {
+  botonHeaderSalir: {
+    backgroundColor: '#ff3b30',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  textoBotonHeaderSalir: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  headerActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 20,
+    marginTop: 15,
   },
   botonAgregar: {
     backgroundColor: '#000',
@@ -389,15 +424,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: 'bold',
   },
-  botonCerrarSesion: {
-    backgroundColor: '#ff3b30',
+  botonActualizar: {
+    backgroundColor: '#007aff',
     padding: 10,
     borderRadius: 5,
-    width: 80,
+    width: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  textoBotonCerrarSesion: {
+  textoBotonActualizar: {
     color: '#fff',
-    textAlign: 'center',
+    fontSize: 20,
     fontWeight: 'bold',
   },
   itemRepuesto: {
