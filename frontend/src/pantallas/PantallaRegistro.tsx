@@ -1,27 +1,59 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
 
-export default function PantallaLogin({ navigation }: any) {
+export default function PantallaRegistro({ navigation }: any) {
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
+  const [confirmarContrasena, setConfirmarContrasena] = useState('');
 
-  const manejarInicioSesion = async () => {
+  const manejarRegistro = async () => {
+    if (contrasena !== confirmarContrasena) {
+      Alert.alert('Error', 'Las contraseñas no coinciden');
+      return;
+    }
+
+    if (contrasena.length < 6) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
     try {
-      const credencialesUsuario = await signInWithEmailAndPassword(auth, correo, contrasena);
+      const credencialesUsuario = await createUserWithEmailAndPassword(auth, correo, contrasena);
       const usuario = credencialesUsuario.user;
-      console.log('Usuario conectado:', usuario.email);
-      navigation.navigate('Repuestos');
+      console.log('Usuario registrado:', usuario.email);
+      Alert.alert('Éxito', 'Usuario registrado correctamente', [
+        {
+          text: 'OK',
+          onPress: () => navigation.navigate('Inicio')
+        }
+      ]);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      let mensajeError = 'Error al registrar usuario';
+      
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          mensajeError = 'Este correo electrónico ya está registrado';
+          break;
+        case 'auth/invalid-email':
+          mensajeError = 'Correo electrónico inválido';
+          break;
+        case 'auth/weak-password':
+          mensajeError = 'La contraseña es muy débil';
+          break;
+        default:
+          mensajeError = error.message;
+      }
+      
+      Alert.alert('Error', mensajeError);
     }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.formContainer}>
-        <Text style={styles.titulo}>Gestión de Repuestos</Text>
+        <Text style={styles.titulo}>Crear Cuenta</Text>
         <TextInput
           style={styles.input}
           placeholder="Correo electrónico"
@@ -39,14 +71,22 @@ export default function PantallaLogin({ navigation }: any) {
           onChangeText={setContrasena}
           secureTextEntry
         />
-        <TouchableOpacity style={styles.boton} onPress={manejarInicioSesion}>
-          <Text style={styles.textoBoton}>Iniciar Sesión</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Confirmar contraseña"
+          placeholderTextColor="#666"
+          value={confirmarContrasena}
+          onChangeText={setConfirmarContrasena}
+          secureTextEntry
+        />
+        <TouchableOpacity style={styles.boton} onPress={manejarRegistro}>
+          <Text style={styles.textoBoton}>Registrarse</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.botonSecundario} 
-          onPress={() => navigation.navigate('Registro')}
+          onPress={() => navigation.navigate('Inicio')}
         >
-          <Text style={styles.textoBotonSecundario}>¿No tienes cuenta? Regístrate</Text>
+          <Text style={styles.textoBotonSecundario}>¿Ya tienes cuenta? Inicia sesión</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -93,6 +133,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 5,
     alignItems: 'center',
+    marginBottom: 15,
   },
   textoBoton: {
     color: '#fff',

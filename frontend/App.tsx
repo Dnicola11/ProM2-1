@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import PantallaLogin from './src/pantallas/PantallaLogin';
 import PantallaRepuestos from './src/pantallas/PantallaRepuestos';
+import PantallaRegistro from './src/pantallas/PantallaRegistro';
 
 const Stack = createNativeStackNavigator();
 
@@ -33,6 +34,17 @@ export default function App() {
           options={{ 
             title: 'Gestión de Repuestos',
             headerLeft: () => null,
+          }}
+        />
+        <Stack.Screen 
+          name="Registro" 
+          component={PantallaRegistro}
+          options={{ 
+            title: 'Registro de Usuario',
+            headerStyle: {
+              backgroundColor: '#000',
+            },
+            headerTintColor: '#fff',
           }}
         />
       </Stack.Navigator>
