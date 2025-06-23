@@ -1,20 +1,52 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../firebaseConfig';
+import { auth, isFirestoreError, enableFirestoreNetwork } from '../../firebaseConfig';
 
 export default function PantallaLogin({ navigation }: any) {
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
+  const [cargando, setCargando] = useState(false);
 
   const manejarInicioSesion = async () => {
+    if (!correo.trim() || !contrasena) {
+      Alert.alert('Error', 'Por favor complete todos los campos');
+      return;
+    }
+
+    setCargando(true);
     try {
+      // Intentar habilitar la red de Firestore
+      await enableFirestoreNetwork();
+      
       const credencialesUsuario = await signInWithEmailAndPassword(auth, correo, contrasena);
       const usuario = credencialesUsuario.user;
       console.log('Usuario conectado:', usuario.email);
       navigation.navigate('Repuestos');
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      console.error('Error de inicio de sesión:', error);
+      
+      if (isFirestoreError(error)) {
+        Alert.alert(
+          'Error de Conexión',
+          'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet e intenta nuevamente.'
+        );
+      } else {
+        // Traducir mensajes de error comunes
+        let mensaje = 'Error al iniciar sesión. Por favor intente nuevamente.';
+        if (error.code === 'auth/user-not-found') {
+          mensaje = 'No existe una cuenta con este correo electrónico.';
+        } else if (error.code === 'auth/wrong-password') {
+          mensaje = 'Contraseña incorrecta.';
+        } else if (error.code === 'auth/invalid-email') {
+          mensaje = 'El formato del correo electrónico no es válido.';
+        } else if (error.code === 'auth/too-many-requests') {
+          mensaje = 'Demasiados intentos fallidos. Por favor, intente más tarde.';
+        }
+        Alert.alert('Error', mensaje);
+      }
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -39,8 +71,16 @@ export default function PantallaLogin({ navigation }: any) {
           onChangeText={setContrasena}
           secureTextEntry
         />
-        <TouchableOpacity style={styles.boton} onPress={manejarInicioSesion}>
-          <Text style={styles.textoBoton}>Iniciar Sesión</Text>
+        <TouchableOpacity 
+          style={[styles.boton, cargando && styles.botonDeshabilitado]} 
+          onPress={manejarInicioSesion}
+          disabled={cargando}
+        >
+          {cargando ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.textoBoton}>Iniciar Sesión</Text>
+          )}
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.botonSecundario} 
@@ -107,5 +147,8 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
     textDecorationLine: 'underline',
+  },
+  botonDeshabilitado: {
+    opacity: 0.6,
   },
 });

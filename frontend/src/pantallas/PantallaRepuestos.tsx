@@ -11,7 +11,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { db, auth } from '../../firebaseConfig';
+import { db, auth, isFirestoreError, enableFirestoreNetwork } from '../../firebaseConfig';
 
 type Repuesto = {
   id: string;
@@ -31,7 +31,20 @@ export default function PantallaRepuestos({ navigation }: any) {
   const [cargandoLista, setCargandoLista] = useState(true);
 
   useEffect(() => {
-    obtenerRepuestos();
+    const inicializarFirestore = async () => {
+      try {
+        await enableFirestoreNetwork();
+        obtenerRepuestos();
+      } catch (error) {
+        console.error('Error al inicializar Firestore:', error);
+        Alert.alert(
+          'Error de Conexión',
+          'No se pudo establecer conexión con el servidor. La aplicación funcionará en modo sin conexión.'
+        );
+      }
+    };
+    
+    inicializarFirestore();
   }, []);
 
   useEffect(() => {
@@ -60,7 +73,7 @@ export default function PantallaRepuestos({ navigation }: any) {
       setRepuestos(repuestosData);
     } catch (error: any) {
       console.error('Error al obtener repuestos:', error);
-      if (error.code === 'unavailable') {
+      if (isFirestoreError(error)) {
         Alert.alert(
           'Sin conexión',
           'No se puede conectar al servidor. Verifica tu conexión a internet.',
@@ -128,18 +141,22 @@ export default function PantallaRepuestos({ navigation }: any) {
       return;
     }
 
+    const datosActualizados = {
+      nombre: nombre.trim(),
+      cantidad: parseInt(cantidad),
+      precio: parseFloat(precio),
+    };
+
+    setCargando(true);
+
     try {
-      setCargando(true);
+      // Intentar habilitar la red primero
+      await enableFirestoreNetwork();
 
-      const datosActualizados = {
-        nombre: nombre.trim(),
-        cantidad: parseInt(cantidad),
-        precio: parseFloat(precio),
-      };
-
+      // Intentar actualizar en Firebase
       await updateDoc(doc(db, 'spareParts', repuestoEditando.id), datosActualizados);
 
-      // Actualizar la lista local inmediatamente
+      // Si la actualización fue exitosa, actualizar UI y cerrar modal
       setRepuestos(prev => 
         prev.map(item => 
           item.id === repuestoEditando.id 
@@ -150,14 +167,13 @@ export default function PantallaRepuestos({ navigation }: any) {
 
       limpiarFormulario();
       setModalVisible(false);
-      
       Alert.alert('Éxito', 'Repuesto actualizado correctamente');
     } catch (error: any) {
       console.error('Error al actualizar repuesto:', error);
-      if (error.code === 'unavailable') {
+      if (isFirestoreError(error)) {
         Alert.alert(
-          'Sin conexión',
-          'No se puede conectar al servidor. Los cambios se guardarán cuando se restablezca la conexión.',
+          'Error de conexión',
+          'No se pudo conectar al servidor. Por favor, verifica tu conexión a internet e intenta nuevamente.',
           [{ text: 'OK' }]
         );
       } else {
@@ -167,6 +183,8 @@ export default function PantallaRepuestos({ navigation }: any) {
       setCargando(false);
     }
   };
+
+  const [eliminando, setEliminando] = useState<string | null>(null);
 
   const manejarEliminar = async (id: string, nombre: string) => {
     Alert.alert(
@@ -181,24 +199,30 @@ export default function PantallaRepuestos({ navigation }: any) {
           text: 'Eliminar',
           style: 'destructive',
           onPress: async () => {
+            setEliminando(id);
             try {
+              // Intentar habilitar la red primero
+              await enableFirestoreNetwork();
+
+              // Intentar eliminar en Firebase
               await deleteDoc(doc(db, 'spareParts', id));
-              
-              // Remover de la lista local inmediatamente
+
+              // Si la eliminación fue exitosa, actualizar UI
               setRepuestos(prev => prev.filter(item => item.id !== id));
-              
               Alert.alert('Éxito', 'Repuesto eliminado correctamente');
             } catch (error: any) {
               console.error('Error al eliminar repuesto:', error);
-              if (error.code === 'unavailable') {
+              if (isFirestoreError(error)) {
                 Alert.alert(
-                  'Sin conexión',
-                  'No se puede conectar al servidor. El elemento se eliminará cuando se restablezca la conexión.',
+                  'Error de conexión',
+                  'No se pudo conectar al servidor. Por favor, verifica tu conexión a internet e intenta nuevamente.',
                   [{ text: 'OK' }]
                 );
               } else {
                 Alert.alert('Error', 'No se pudo eliminar el repuesto');
               }
+            } finally {
+              setEliminando(null);
             }
           },
         },
